@@ -117,6 +117,89 @@ http://localhost:8000/docs
 
 ---
 
+# Acesso pelo celular (rede local)
+
+O microfone só funciona em **contexto seguro** (HTTPS ou localhost). Para acessar o sistema de outro dispositivo na mesma rede Wi-Fi (ex: celular), siga os passos abaixo:
+
+### 1 - Descobrir o IP da máquina
+
+```bash
+# Linux / macOS
+ip route get 1 | awk '{print $7; exit}'
+# ou
+hostname -I | awk '{print $1}'
+
+# Windows
+ipconfig
+```
+
+### 2 - Gerar um certificado autoassinado para o backend
+
+```bash
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes \
+  -subj "/CN=localhost" \
+  -addext "subjectAltName=IP:127.0.0.1,IP:192.168.1.100"
+```
+
+> Substitua `192.168.1.100` pelo IP real da sua máquina. Os arquivos `key.pem` e `cert.pem` são usados apenas em desenvolvimento — **não os comite no repositório**.
+
+### 3 - Configurar a URL do backend no frontend
+
+Copie o arquivo `.env.example` para `.env.local` e substitua o IP:
+
+```bash
+cd frontend
+cp .env.example .env.local
+# edite .env.local e defina, por exemplo:
+# VITE_BACKEND_URL=https://192.168.1.100:8000
+```
+
+### 4 - Iniciar o backend com HTTPS e acessível na rede
+
+Defina também a variável `ALLOWED_ORIGINS` com a origem HTTPS do frontend:
+
+```bash
+cd backend
+
+# Linux / macOS
+ALLOWED_ORIGINS="http://localhost:5173,https://localhost:5173,https://192.168.1.100:5173" \
+  uvicorn app.main:app --reload --host 0.0.0.0 \
+  --ssl-keyfile ../key.pem --ssl-certfile ../cert.pem
+
+# Windows (PowerShell)
+$env:ALLOWED_ORIGINS="http://localhost:5173,https://localhost:5173,https://192.168.1.100:5173"
+uvicorn app.main:app --reload --host 0.0.0.0 --ssl-keyfile ..\key.pem --ssl-certfile ..\cert.pem
+```
+
+### 5 - Iniciar o frontend com HTTPS e exposição na rede
+
+```bash
+cd frontend
+npm run dev
+```
+
+O servidor Vite exibirá URLs semelhantes a:
+
+```
+  HTTPS:  https://localhost:5173/
+  HTTPS:  https://192.168.1.100:5173/
+```
+
+### 6 - Aceitar os certificados autoassinados
+
+Antes de abrir o app no celular, acesse pelo **navegador do celular** cada URL abaixo e aceite o aviso de segurança ("Avançado" → "Prosseguir assim mesmo"):
+
+1. `https://192.168.1.100:8000` — backend (aceitar o certificado)
+2. `https://192.168.1.100:5173` — frontend (aceitar o certificado)
+
+> O aviso de certificado aparece porque o certificado é autoassinado. Isso é normal em ambiente de desenvolvimento local.
+
+### 7 - Usar o app no celular
+
+Após aceitar ambos os certificados, acesse: `https://192.168.1.100:5173`
+
+---
+
 # Licença
 
 Definir conforme política do projeto.
