@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File
-from app.services.audio_service import save_audio_file
+from app.services.audio_service import save_audio_file, transcribe_audio
 
 router = APIRouter(
     prefix="/audio",
@@ -9,10 +9,13 @@ router = APIRouter(
 
 @router.post("/upload")
 async def upload_audio(file: UploadFile = File(...)):
-    
-    saved_file = save_audio_file(file)
+
+    file_path = save_audio_file(file)
+
+    transcription = transcribe_audio(file_path)
 
     return {
-        "message": "Arquivo salvo com sucesso",
-        "filename": saved_file
+        "message": "Arquivo processado com sucesso",
+        "filename": file.filename,
+        "transcription": transcription
     }

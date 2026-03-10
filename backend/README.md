@@ -1,8 +1,13 @@
 # Backend — Audio Transcription System
 
-Backend da aplicação **Audio Transcription System**, desenvolvido em **FastAPI**, responsável por receber arquivos de áudio enviados pelo frontend e armazená-los no servidor para processamento posterior.
+Backend da aplicação **Audio Transcription System**, desenvolvido em **FastAPI**, responsável por:
 
-Este backend foi estruturado para permitir evolução futura para um pipeline completo de **transcrição automática de áudio (speech-to-text)**.
+* receber arquivos de áudio enviados pelo frontend
+* armazenar os arquivos no servidor
+* gerar automaticamente a **transcrição do áudio utilizando Whisper**
+* retornar o texto transcrito para o cliente
+
+O backend foi estruturado para permitir evolução futura para um pipeline completo de **speech-to-text** com processamento assíncrono.
 
 ---
 
@@ -13,6 +18,8 @@ Este backend foi estruturado para permitir evolução futura para um pipeline co
 * Uvicorn
 * Pydantic
 * python-multipart
+* Whisper (OpenAI)
+* PyTorch
 
 ---
 
@@ -39,6 +46,7 @@ backend/
 │
 ├── uploads/                   # Diretório onde os áudios são armazenados
 │
+├── run_backend.py             # Script para automatizar execução do backend
 ├── requirements.txt
 └── README.md
 ```
@@ -47,7 +55,7 @@ backend/
 
 # Responsabilidade dos Módulos
 
-### main.py
+## main.py
 
 Arquivo principal da aplicação.
 
@@ -58,7 +66,7 @@ Responsável por:
 
 ---
 
-### routers
+## routers
 
 Define os **endpoints da API**.
 
@@ -66,42 +74,42 @@ Responsabilidades:
 
 * receber requisições
 * validar parâmetros
-* encaminhar para os services
+* encaminhar chamadas para os services
 
 ---
 
-### services
+## services
 
 Contém a **lógica de negócio da aplicação**.
 
-Exemplo:
+Responsabilidades:
 
-* salvar arquivos
-* iniciar processamento de áudio
-* integração com serviços externos
+* salvar arquivos de áudio
+* executar a transcrição usando Whisper
+* retornar o resultado da transcrição
 
 ---
 
-### schemas
+## schemas
 
 Define os **modelos de dados utilizados pela API**, utilizando **Pydantic**.
 
 Responsabilidades:
 
 * validação de dados
-* estrutura de respostas da API
+* estrutura das respostas da API
 
 ---
 
-### config
+## config
 
 Centraliza configurações da aplicação.
 
 Exemplo:
 
 * diretórios do sistema
-* variáveis de ambiente
 * paths de armazenamento
+* variáveis de ambiente
 
 ---
 
@@ -137,11 +145,31 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+As dependências incluem o **Whisper**, que será utilizado para realizar a transcrição automática do áudio.
+
 ---
 
-# Executando o servidor
+# Execução Automatizada
 
-A partir da pasta **backend**:
+O backend pode ser iniciado com o script:
+
+```
+python run_backend.py
+```
+
+Esse script automaticamente:
+
+* cria o ambiente virtual (se necessário)
+* atualiza o pip
+* instala as dependências
+* cria o diretório `uploads`
+* inicia o servidor FastAPI
+
+---
+
+# Executando manualmente
+
+Também é possível iniciar o servidor manualmente:
 
 ```
 uvicorn app.main:app --reload
@@ -157,9 +185,9 @@ http://localhost:8000
 
 # Documentação automática da API
 
-FastAPI gera automaticamente a documentação interativa.
+FastAPI gera automaticamente documentação interativa.
 
-### Swagger UI
+### Swagger
 
 ```
 http://localhost:8000/docs
@@ -173,11 +201,11 @@ http://localhost:8000/redoc
 
 ---
 
-# Endpoint de Upload de Áudio
+# Endpoint de Upload e Transcrição
 
 ## POST /audio/upload
 
-Recebe um arquivo de áudio enviado pelo cliente e armazena no servidor.
+Recebe um arquivo de áudio, salva no servidor e executa a **transcrição automática utilizando Whisper**.
 
 ---
 
@@ -189,7 +217,7 @@ Recebe um arquivo de áudio enviado pelo cliente e armazena no servidor.
 
 ---
 
-## Exemplo de requisição (curl)
+## Exemplo de requisição
 
 ```
 curl -X POST "http://localhost:8000/audio/upload" \
@@ -204,8 +232,9 @@ curl -X POST "http://localhost:8000/audio/upload" \
 
 ```
 {
-  "message": "Arquivo salvo com sucesso",
-  "filename": "audio.mp3"
+  "message": "Arquivo processado com sucesso",
+  "filename": "audio.mp3",
+  "transcription": "Olá, este é um exemplo de transcrição de áudio."
 }
 ```
 
@@ -223,6 +252,42 @@ Esse diretório é criado automaticamente caso não exista.
 
 ---
 
+# Modelos Whisper
+
+O Whisper possui diferentes modelos com diferentes níveis de precisão e desempenho.
+
+| Modelo | Velocidade   | Qualidade |
+| ------ | ------------ | --------- |
+| tiny   | muito rápido | baixa     |
+| base   | rápido       | boa       |
+| small  | médio        | melhor    |
+| medium | lento        | alta      |
+| large  | mais lento   | excelente |
+
+Exemplo utilizado no projeto:
+
+```
+model = whisper.load_model("base")
+```
+
+---
+
+# Fluxo de Processamento
+
+```
+Upload de áudio
+      ↓
+Armazenamento do arquivo
+      ↓
+Processamento com Whisper
+      ↓
+Geração da transcrição
+      ↓
+Retorno do texto pela API
+```
+
+---
+
 # Melhorias Futuras
 
 Funcionalidades planejadas para evolução do backend:
@@ -230,35 +295,36 @@ Funcionalidades planejadas para evolução do backend:
 * geração automática de nomes únicos para arquivos
 * validação de tipos de áudio
 * limite de tamanho de upload
-* processamento assíncrono de tarefas
-* integração com modelos de transcrição de áudio
+* transcrição assíncrona
 * armazenamento de transcrições em banco de dados
+* histórico de áudios processados
+* API para consulta de transcrições
 
 ---
 
 # Evolução Arquitetural Planejada
 
-A arquitetura do sistema foi preparada para evoluir para um pipeline de processamento como o seguinte:
+Arquitetura futura do sistema:
 
 ```
 Upload de áudio
       ↓
-Armazenamento do arquivo
+Armazenamento
       ↓
 Fila de processamento
       ↓
-Worker de transcrição
+Worker Whisper
       ↓
-Armazenamento do texto
+Armazenamento da transcrição
       ↓
-Consulta das transcrições pela API
+Consulta via API
 ```
 
-Possíveis tecnologias futuras:
+Possíveis tecnologias:
 
-* Redis / RabbitMQ (fila de tarefas)
-* Celery / RQ (workers)
-* Whisper ou outros modelos de speech-to-text
+* Redis / RabbitMQ
+* Celery / RQ
+* banco de dados para armazenar transcrições
 
 ---
 
