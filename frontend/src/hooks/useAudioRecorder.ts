@@ -20,6 +20,12 @@ export function useAudioRecorder() {
     chunksRef.current = []
 
     try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error(
+          'O navegador requer uma conexão segura (HTTPS) para acessar o microfone. Acesse via HTTPS ou use localhost.'
+        )
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
 
