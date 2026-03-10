@@ -1,5 +1,5 @@
-from fastapi import APIRouter, UploadFile, File
-from app.services.audio_service import save_audio_file, transcribe_audio
+from fastapi import APIRouter, UploadFile, File, Query, HTTPException
+from app.services.audio_service import save_audio_file, transcribe_audio, VALID_MODELS
 
 router = APIRouter(
     prefix="/audio",
@@ -8,11 +8,19 @@ router = APIRouter(
 
 
 @router.post("/upload")
-async def upload_audio(file: UploadFile = File(...)):
+async def upload_audio(
+    file: UploadFile = File(...),
+    model: str = Query("base", description="Modelo Whisper a ser utilizado")
+):
+    if model not in VALID_MODELS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Modelo inválido: '{model}'. Modelos permitidos: {VALID_MODELS}"
+        )
 
     file_path = save_audio_file(file)
 
-    transcription = transcribe_audio(file_path)
+    transcription = transcribe_audio(file_path, model)
 
     return {
         "message": "Arquivo processado com sucesso",

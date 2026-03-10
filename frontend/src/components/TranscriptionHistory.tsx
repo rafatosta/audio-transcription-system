@@ -5,6 +5,7 @@ interface Props {
   onSelect: (entry: TranscriptionEntry) => void
   onRemove: (id: string) => void
   onClear: () => void
+  onSaveHistory: () => void
 }
 
 function formatDate(isoString: string) {
@@ -24,7 +25,7 @@ function formatDuration(seconds?: number) {
   return m > 0 ? `${m}m ${s}s` : `${s}s`
 }
 
-export default function TranscriptionHistory({ history, onSelect, onRemove, onClear }: Props) {
+export default function TranscriptionHistory({ history, onSelect, onRemove, onClear, onSaveHistory }: Props) {
   if (history.length === 0) {
     return (
       <div className="text-center py-10 text-gray-400 text-sm">
@@ -35,14 +36,22 @@ export default function TranscriptionHistory({ history, onSelect, onRemove, onCl
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
         <span className="text-sm text-gray-500">{history.length} transcrição(ões)</span>
-        <button
-          onClick={onClear}
-          className="text-xs text-red-400 hover:text-red-600 transition-colors cursor-pointer"
-        >
-          Limpar tudo
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onSaveHistory}
+            className="text-xs text-emerald-500 hover:text-emerald-700 transition-colors cursor-pointer"
+          >
+            💾 Salvar Histórico
+          </button>
+          <button
+            onClick={onClear}
+            className="text-xs text-red-400 hover:text-red-600 transition-colors cursor-pointer"
+          >
+            Limpar tudo
+          </button>
+        </div>
       </div>
 
       <ul className="flex flex-col gap-2 max-h-80 overflow-y-auto pr-1">

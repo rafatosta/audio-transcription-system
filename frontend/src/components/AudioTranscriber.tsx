@@ -9,6 +9,28 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000'
 
 type Mode = 'microphone' | 'file'
 
+type WhisperModel = 'tiny' | 'base' | 'small' | 'medium' | 'large'
+
+const WHISPER_MODELS: { value: WhisperModel; label: string; description: string }[] = [
+  { value: 'tiny',   label: 'Tiny',   description: 'Muito rápido · Baixa qualidade' },
+  { value: 'base',   label: 'Base',   description: 'Rápido · Boa qualidade' },
+  { value: 'small',  label: 'Small',  description: 'Médio · Melhor qualidade' },
+  { value: 'medium', label: 'Medium', description: 'Lento · Alta qualidade' },
+  { value: 'large',  label: 'Large',  description: 'Mais lento · Excelente qualidade' },
+]
+
+const MODEL_STORAGE_KEY = 'whisper_selected_model'
+
+function downloadTextFile(content: string, filename: string) {
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 function formatDuration(seconds: number) {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
@@ -23,6 +45,11 @@ function formatFileSize(bytes: number) {
 
 export default function AudioTranscriber() {
   const [mode, setMode] = useState<Mode>('microphone')
+
+  const savedModel = localStorage.getItem(MODEL_STORAGE_KEY) as WhisperModel | null
+  const [selectedModel, setSelectedModel] = useState<WhisperModel>(
+    savedModel && WHISPER_MODELS.some((m) => m.value === savedModel) ? savedModel : 'base'
+  )
 
   const {
     recordingState,
@@ -56,6 +83,11 @@ export default function AudioTranscriber() {
   const audioBlobUrlRef = useRef<string | null>(null)
 
   const fileInputId = useId()
+
+  const handleModelChange = useCallback((model: WhisperModel) => {
+    setSelectedModel(model)
+    localStorage.setItem(MODEL_STORAGE_KEY, model)
+  }, [])
 
   // Manage object URL lifecycle for recorded audio blob
   useEffect(() => {
@@ -93,7 +125,7 @@ export default function AudioTranscriber() {
       const formData = new FormData()
       formData.append('file', audioBlob, 'recording.webm')
 
-      const response = await fetch(`${BACKEND_URL}/audio/upload`, {
+      const response = await fetch(`${BACKEND_URL}/audio/upload?model=${encodeURIComponent(selectedModel)}`, {
         method: 'POST',
         body: formData,
       })
@@ -112,7 +144,7 @@ export default function AudioTranscriber() {
     } finally {
       setIsLoading(false)
     }
-  }, [audioBlob, recordingDuration, addEntry, resetRecorder])
+  }, [audioBlob, recordingDuration, selectedModel, addEntry, resetRecorder])
 
   // --- File upload transcription ---
   const transcribeFile = useCallback(async () => {
@@ -126,7 +158,7 @@ export default function AudioTranscriber() {
       const formData = new FormData()
       formData.append('file', selectedFile, selectedFile.name)
 
-      const response = await fetch(`${BACKEND_URL}/audio/upload`, {
+      const response = await fetch(`${BACKEND_URL}/audio/upload?model=${encodeURIComponent(selectedModel)}`, {
         method: 'POST',
         body: formData,
       })
@@ -148,7 +180,7 @@ export default function AudioTranscriber() {
     } finally {
       setIsLoading(false)
     }
-  }, [selectedFile, addEntry, resetFileUpload, setFileError, setUploadState])
+  }, [selectedFile, selectedModel, addEntry, resetFileUpload, setFileError, setUploadState])
 
   const handleCancelFileUpload = useCallback(() => {
     resetFileUpload()
@@ -162,6 +194,41 @@ export default function AudioTranscriber() {
       setTimeout(() => setCopied(false), 2000)
     })
   }, [transcription])
+
+  const handleClear = useCallback(() => {
+    setTranscription('')
+  }, [])
+
+  const handleSaveResult = useCallback(() => {
+    if (!transcription) return
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    downloadTextFile(transcription, `transcricao-${timestamp}.txt`)
+  }, [transcription])
+
+  const handleSaveHistory = useCallback(() => {
+    if (history.length === 0) return
+    const lines: string[] = [
+      '==========================================',
+      'HISTÓRICO DE TRANSCRIÇÕES',
+      '==========================================',
+      '',
+    ]
+    history.forEach((entry, index) => {
+      const date = new Date(entry.timestamp).toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })
+      lines.push(`[${index + 1}] ${date}`)
+      lines.push(entry.text)
+      lines.push('')
+    })
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    downloadTextFile(lines.join('\n'), `historico-transcricoes-${timestamp}.txt`)
+  }, [history])
 
   const handleSelectHistory = useCallback((entry: TranscriptionEntry) => {
     setTranscription(entry.text)
@@ -187,6 +254,25 @@ export default function AudioTranscriber() {
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-800 tracking-tight">🎙️ Transcrição de Áudio</h1>
           <p className="mt-1 text-gray-500 text-sm">Grave ou carregue um arquivo e obtenha o texto transcrito</p>
+        </div>
+
+        {/* Model selector */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+          <label htmlFor="whisper-model" className="text-sm font-medium text-gray-700 whitespace-nowrap">
+            🎛️ Modelo Whisper
+          </label>
+          <select
+            id="whisper-model"
+            value={selectedModel}
+            onChange={(e) => handleModelChange(e.target.value as WhisperModel)}
+            className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white cursor-pointer"
+          >
+            {WHISPER_MODELS.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label} — {m.description}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Mode tabs */}
@@ -377,22 +463,39 @@ export default function AudioTranscriber() {
 
         {/* Transcription result */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 flex flex-col gap-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="font-semibold text-gray-700">Resultado</h2>
-            <button
-              onClick={handleCopy}
-              disabled={!transcription}
-              className="text-sm text-indigo-500 hover:text-indigo-700 disabled:opacity-40 transition-colors cursor-pointer"
-            >
-              {copied ? '✅ Copiado!' : '📋 Copiar'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopy}
+                disabled={!transcription}
+                className="text-sm text-indigo-500 hover:text-indigo-700 disabled:opacity-40 transition-colors cursor-pointer"
+              >
+                {copied ? '✅ Copiado!' : '📋 Copiar'}
+              </button>
+              <button
+                onClick={handleClear}
+                disabled={!transcription}
+                className="text-sm text-gray-400 hover:text-gray-600 disabled:opacity-40 transition-colors cursor-pointer"
+              >
+                🗑️ Limpar
+              </button>
+              <button
+                onClick={handleSaveResult}
+                disabled={!transcription}
+                className="text-sm text-emerald-500 hover:text-emerald-700 disabled:opacity-40 transition-colors cursor-pointer"
+              >
+                💾 Salvar .txt
+              </button>
+            </div>
           </div>
           <textarea
             value={transcription}
-            onChange={(e) => setTranscription(e.target.value)}
+            readOnly
+            aria-readonly="true"
             placeholder="O texto transcrito aparecerá aqui…"
             rows={5}
-            className="w-full resize-y border border-gray-200 rounded-xl p-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 transition"
+            className="w-full resize-y border border-gray-200 rounded-xl p-3 text-sm text-gray-800 focus:outline-none transition bg-gray-50 cursor-default"
           />
         </div>
 
@@ -413,6 +516,7 @@ export default function AudioTranscriber() {
                 onSelect={handleSelectHistory}
                 onRemove={removeEntry}
                 onClear={clearHistory}
+                onSaveHistory={handleSaveHistory}
               />
             </div>
           )}
